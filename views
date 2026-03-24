@@ -1,0 +1,171 @@
+package views;
+
+import database.DatabaseHelper;
+import models.Note;
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.List;
+
+public class MainFrame extends JFrame {
+    
+    private JTable tblNotes;
+    private DefaultTableModel tableModel;
+    private JButton btnAdd, btnEdit, btnDelete, btnRefresh, btnExit;
+    
+    public MainFrame() {
+        initComponents();
+        setupTable();
+        loadNotes();
+        setupEventHandlers();
+        startReminderChecker();
+        
+        setTitle("Ứng dụng Ghi chú + Nhắc nhở");
+        setSize(800, 500);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+    }
+    
+    private void initComponents() {
+        setLayout(new BorderLayout());
+        
+        // Tiêu đề
+        JLabel lblTitle = new JLabel("QUẢN LÝ GHI CHÚ", SwingConstants.CENTER);
+        lblTitle.setFont(new Font("Arial", Font.BOLD, 24));
+        lblTitle.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
+        add(lblTitle, BorderLayout.NORTH);
+        
+        // Bảng hiển thị
+        tableModel = new DefaultTableModel(new String[]{"ID", "Tiêu đề", "Nội dung", "Nhắc nhở", "Ngày tạo"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        tblNotes = new JTable(tableModel);
+        
+        // Ẩn cột ID
+        tblNotes.getColumnModel().getColumn(0).setMinWidth(0);
+        tblNotes.getColumnModel().getColumn(0).setMaxWidth(0);
+        tblNotes.getColumnModel().getColumn(0).setWidth(0);
+        
+        JScrollPane scrollPane = new JScrollPane(tblNotes);
+        add(scrollPane, BorderLayout.CENTER);
+        
+        // Panel nút
+        JPanel panelButtons = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        btnAdd = new JButton("Thêm");
+        btnEdit = new JButton("Sửa");
+        btnDelete = new JButton("Xóa");
+        btnRefresh = new JButton("Làm mới");
+        btnExit = new JButton("Thoát");
+        
+        panelButtons.add(btnAdd);
+        panelButtons.add(btnEdit);
+        panelButtons.add(btnDelete);
+        panelButtons.add(btnRefresh);
+        panelButtons.add(btnExit);
+        
+        add(panelButtons, BorderLayout.SOUTH);
+    }
+    
+    private void setupTable() {
+        // Đã setup trong initComponents
+    }
+    
+    private void loadNotes() {
+        tableModel.setRowCount(0);
+        
+        List<Note> notes = DatabaseHelper.getAllNotes();
+        for (Note note : notes) {
+            Object[] row = {
+                note.getId(),
+                note.getTitle(),
+                note.getContent(),
+                note.getReminderTimeString(),
+                note.getCreatedAt()
+            };
+            tableModel.addRow(row);
+        }
+    }
+    
+    private void setupEventHandlers() {
+        btnAdd.addActionListener(e -> openNoteDialog(null));
+        
+        btnEdit.addActionListener(e -> {
+            int selectedRow = tblNotes.getSelectedRow();
+            if (selectedRow == -1) {
+                JOptionPane.showMessageDialog(this, "Vui lòng chọn ghi chú cần sửa!");
+                return;
+            }
+            int id = (int) tableModel.getValueAt(selectedRow, 0);
+            Note note = DatabaseHelper.getNoteById(id);
+            if (note != null) openNoteDialog(note);
+        });
+        
+        btnDelete.addActionListener(e -> {
+            int selectedRow = tblNotes.getSelectedRow();
+            if (selectedRow == -1) {
+                JOptionPane.showMessageDialog(this, "Vui lòng chọn ghi chú cần xóa!");
+                return;
+            }
+            
+            int confirm = JOptionPane.showConfirmDialog(this, 
+                "Bạn có chắc muốn xóa ghi chú này?", "Xác nhận", 
+                JOptionPane.YES_NO_OPTION);
+            
+            if (confirm == JOptionPane.YES_OPTION) {
+                int id = (int) tableModel.getValueAt(selectedRow, 0);
+                if (DatabaseHelper.deleteNote(id)) {
+                    JOptionPane.showMessageDialog(this, "Xóa thành công!");
+                    loadNotes();
+                } else {
+                    JOptionPane.showMessageDialog(this, "Xóa thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+        
+        btnRefresh.addActionListener(e -> loadNotes());
+        
+        btnExit.addActionListener(e -> System.exit(0));
+        
+        tblNotes.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    int selectedRow = tblNotes.getSelectedRow();
+                    if (selectedRow != -1) {
+                        int id = (int) tableModel.getValueAt(selectedRow, 0);
+                        Note note = DatabaseHelper.getNoteById(id);
+                        if (note != null) openNoteDialog(note);
+                    }
+                }
+            }
+        });
+    }
+    
+    private void openNoteDialog(Note note) {
+        NoteDialog dialog = new NoteDialog(this, note);
+        dialog.setVisible(true);
+        loadNotes();
+    }
+    
+    private void startReminderChecker() {
+        Timer timer = new Timer(60000, e -> checkReminders());
+        timer.start();
+    }
+    
+    private void checkReminders() {
+        List<Note> reminders = DatabaseHelper.getUpcomingReminders();
+        for (Note note : reminders) {
+            JOptionPane.showMessageDialog(this,
+                "🔔 " + note.getTitle() + "\n\n" + note.getContent(),
+                "Nhắc nhở",
+                JOptionPane.INFORMATION_MESSAGE);
+            
+            note.setReminderTime(null);
+            DatabaseHelper.updateNote(note);
+        }
+    }
+}
