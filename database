@@ -1,0 +1,164 @@
+package database;
+
+import models.Note;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class DatabaseHelper {
+    
+    // ========== THÔNG SỐ KẾT NỐI - SỬA THEO MÁY BẠN ==========
+    private static final String SERVER = "localhost\\SQLEXPRESS";
+    private static final String PORT = "1433";
+    private static final String DATABASE_NAME = "NoteReminderDB";
+    private static final String USERNAME = "sa";
+    private static final String PASSWORD = "123456";  // SỬA LẠI MẬT KHẨU CỦA BẠN
+    // ========================================================
+    
+    private static final String URL = "jdbc:sqlserver://" + SERVER + ":" + PORT 
+            + ";databaseName=" + DATABASE_NAME 
+            + ";encrypt=true;trustServerCertificate=true";
+    
+    // Đăng ký driver
+    static {
+        try {
+            Class.forName("com.microsoft.sqlserver.jdbc.SQLServerDriver");
+            System.out.println("✅ Driver SQL Server đã được nạp!");
+        } catch (ClassNotFoundException e) {
+            System.out.println("❌ Lỗi: Không tìm thấy driver!");
+            e.printStackTrace();
+        }
+    }
+    
+    // Lấy kết nối
+    public static Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(URL, USERNAME, PASSWORD);
+    }
+    
+    // Lấy tất cả ghi chú
+    public static List<Note> getAllNotes() {
+        List<Note> notes = new ArrayList<>();
+        String sql = "SELECT * FROM Notes ORDER BY CreatedAt DESC";
+        
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            
+            while (rs.next()) {
+                Note note = new Note(
+                    rs.getInt("Id"),
+                    rs.getString("Title"),
+                    rs.getString("Content"),
+                    rs.getTimestamp("ReminderTime"),
+                    rs.getTimestamp("CreatedAt")
+                );
+                notes.add(note);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return notes;
+    }
+    
+    // Thêm ghi chú mới
+    public static boolean insertNote(Note note) {
+        String sql = "INSERT INTO Notes (Title, Content, ReminderTime) VALUES (?, ?, ?)";
+        
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, note.getTitle());
+            pstmt.setString(2, note.getContent());
+            pstmt.setTimestamp(3, note.getReminderTime());
+            
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    
+    // Cập nhật ghi chú
+    public static boolean updateNote(Note note) {
+        String sql = "UPDATE Notes SET Title = ?, Content = ?, ReminderTime = ? WHERE Id = ?";
+        
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, note.getTitle());
+            pstmt.setString(2, note.getContent());
+            pstmt.setTimestamp(3, note.getReminderTime());
+            pstmt.setInt(4, note.getId());
+            
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    
+    // Xóa ghi chú
+    public static boolean deleteNote(int id) {
+        String sql = "DELETE FROM Notes WHERE Id = ?";
+        
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setInt(1, id);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    
+    // Lấy ghi chú theo ID
+    public static Note getNoteById(int id) {
+        String sql = "SELECT * FROM Notes WHERE Id = ?";
+        
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setInt(1, id);
+            ResultSet rs = pstmt.executeQuery();
+            
+            if (rs.next()) {
+                return new Note(
+                    rs.getInt("Id"),
+                    rs.getString("Title"),
+                    rs.getString("Content"),
+                    rs.getTimestamp("ReminderTime"),
+                    rs.getTimestamp("CreatedAt")
+                );
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    
+    // Lấy các ghi chú sắp đến giờ nhắc
+    public static List<Note> getUpcomingReminders() {
+        List<Note> notes = new ArrayList<>();
+        String sql = "SELECT * FROM Notes WHERE ReminderTime IS NOT NULL AND ReminderTime <= GETDATE()";
+        
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            
+            while (rs.next()) {
+                Note note = new Note(
+                    rs.getInt("Id"),
+                    rs.getString("Title"),
+                    rs.getString("Content"),
+                    rs.getTimestamp("ReminderTime"),
+                    rs.getTimestamp("CreatedAt")
+                );
+                notes.add(note);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return notes;
+    }
+}
