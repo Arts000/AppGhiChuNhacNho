@@ -1,0 +1,170 @@
+package views;
+
+import database.DatabaseHelper;
+import models.Note;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.sql.Timestamp;
+import java.util.Date;
+import java.util.Calendar;
+
+public class NoteDialog extends JDialog {
+    private Note currentNote;
+    private boolean isEditMode;
+    
+    private JTextField txtTitle;
+    private JTextArea txtContent;
+    private JCheckBox chkReminder;
+    private JSpinner spinnerDateTime;
+    private JButton btnSave;
+    private JButton btnCancel;
+    
+    public NoteDialog(JFrame parent, Note note) {
+        super(parent, true);
+        this.currentNote = note;
+        this.isEditMode = (note != null);
+        
+        initComponents();
+        setupDateTimeSpinner();
+        loadData();
+        setupEventHandlers();
+        
+        setTitle(isEditMode ? "Sửa ghi chú" : "Thêm ghi chú mới");
+        setSize(450, 400);
+        setLocationRelativeTo(parent);
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+    }
+    
+    private void initComponents() {
+        setLayout(new BorderLayout());
+        
+        JPanel mainPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        
+        // Tiêu đề
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 0;
+        mainPanel.add(new JLabel("Tiêu đề:"), gbc);
+        
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        txtTitle = new JTextField(20);
+        mainPanel.add(txtTitle, gbc);
+        
+        // Nội dung
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.weightx = 0;
+        gbc.anchor = GridBagConstraints.NORTH;
+        mainPanel.add(new JLabel("Nội dung:"), gbc);
+        
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        txtContent = new JTextArea(5, 20);
+        txtContent.setLineWrap(true);
+        txtContent.setWrapStyleWord(true);
+        JScrollPane scrollPane = new JScrollPane(txtContent);
+        mainPanel.add(scrollPane, gbc);
+        
+        // Nhắc nhở checkbox
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.weightx = 0;
+        gbc.anchor = GridBagConstraints.CENTER;
+        mainPanel.add(new JLabel("Nhắc nhở:"), gbc);
+        
+        gbc.gridx = 1;
+        chkReminder = new JCheckBox("Có nhắc nhở");
+        mainPanel.add(chkReminder, gbc);
+        
+        // Thời gian nhắc nhở
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        mainPanel.add(new JLabel("Thời gian:"), gbc);
+        
+        gbc.gridx = 1;
+        spinnerDateTime = new JSpinner();
+        mainPanel.add(spinnerDateTime, gbc);
+        
+        add(mainPanel, BorderLayout.CENTER);
+        
+        // Panel nút
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        btnSave = new JButton("Lưu");
+        btnCancel = new JButton("Hủy");
+        
+        buttonPanel.add(btnSave);
+        buttonPanel.add(btnCancel);
+        
+        add(buttonPanel, BorderLayout.SOUTH);
+        
+        mainPanel.setBackground(Color.WHITE);
+        buttonPanel.setBackground(Color.WHITE);
+    }
+    
+    private void setupDateTimeSpinner() {
+        SpinnerDateModel model = new SpinnerDateModel(new Date(), null, null, Calendar.DAY_OF_MONTH);
+        spinnerDateTime.setModel(model);
+        spinnerDateTime.setEditor(new JSpinner.DateEditor(spinnerDateTime, "dd/MM/yyyy HH:mm"));
+        spinnerDateTime.setEnabled(false);
+    }
+    
+    private void loadData() {
+        if (isEditMode && currentNote != null) {
+            txtTitle.setText(currentNote.getTitle());
+            txtContent.setText(currentNote.getContent());
+            
+            if (currentNote.getReminderTime() != null) {
+                chkReminder.setSelected(true);
+                spinnerDateTime.setEnabled(true);
+                spinnerDateTime.setValue(new Date(currentNote.getReminderTime().getTime()));
+            }
+        }
+    }
+    
+    private void setupEventHandlers() {
+        chkReminder.addActionListener(e -> spinnerDateTime.setEnabled(chkReminder.isSelected()));
+        
+        btnSave.addActionListener(e -> saveNote());
+        
+        btnCancel.addActionListener(e -> dispose());
+    }
+    
+    private void saveNote() {
+        String title = txtTitle.getText().trim();
+        if (title.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập tiêu đề!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        String content = txtContent.getText().trim();
+        
+        Timestamp reminderTime = null;
+        if (chkReminder.isSelected()) {
+            Date selectedDate = (Date) spinnerDateTime.getValue();
+            reminderTime = new Timestamp(selectedDate.getTime());
+        }
+        
+        boolean success;
+        if (isEditMode) {
+            currentNote.setTitle(title);
+            currentNote.setContent(content);
+            currentNote.setReminderTime(reminderTime);
+            success = DatabaseHelper.updateNote(currentNote);
+        } else {
+            Note newNote = new Note(title, content, reminderTime);
+            success = DatabaseHelper.insertNote(newNote);
+        }
+        
+        if (success) {
+            JOptionPane.showMessageDialog(this, isEditMode ? "Cập nhật thành công!" : "Thêm mới thành công!");
+            dispose();
+        } else {
+            JOptionPane.showMessageDialog(this, "Lưu thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+}
